@@ -1,5 +1,5 @@
 import { openDB } from "idb";
-import { calculateHash } from "./extractModelData";
+// import { calculateHash } from "./extractModelData";
 
 async function initDatabase() {
   const db = await openDB("modelDatabase", 5, {
@@ -25,6 +25,51 @@ async function main() {
 }
 
 main();
+
+export async function calculateHash(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+
+export async function loadModelBlobFromIndexedDB(modelId: string): Promise<{ blob: Blob | null; hash: string | null }> {
+  const db = await openDB("modelDatabase", 5);
+
+  try {
+    console.log("Loading model blob and hash from IndexedDB...");
+    const record = await db.get("geometry", modelId);
+    if (record) {
+      console.log("Model blob and hash loaded from IndexedDB.");
+      return { blob: record.geometryBlob, hash: record.hash || null };
+    } else {
+      console.log("Model blob and hash not found in IndexedDB.");
+      return { blob: null, hash: null };
+    }
+  } catch (error) {
+    console.error("Error loading model blob and hash from IndexedDB:", error);
+    return { blob: null, hash: null };
+  }
+}
+
+
+export async function saveModelBlobToIndexedDB(modelId: string, blob: Blob, hash: string) {
+  const db = await openDB("modelDatabase", 5);
+
+  try {
+    console.log("Saving model blob to IndexedDB...");
+    const tx = db.transaction("geometry", "readwrite");
+    const store = tx.objectStore("geometry");
+
+    await store.put({ id: modelId, geometryBlob: blob, hash });
+
+    await tx.done;
+    console.log("Model blob successfully saved to IndexedDB.");
+  } catch (error) {
+    console.error("Error saving model blob to IndexedDB:", error);
+  }
+}
 
 
 export async function saveToIndexedDB(data: { id: string; geometryBlob: Blob; hash: string }[]) {
